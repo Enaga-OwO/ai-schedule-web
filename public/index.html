@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>習慣改善パートナー</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0a0a12">
+<style>
+:root {
+  --bg:#0a0a12;--bg2:#12121e;--bg3:#1a1a2e;
+  --accent:#818cf8;--accent2:#c084fc;--accent3:#34d399;
+  --text:#e2e8f0;--text2:#94a3b8;
+  --border:rgba(129,140,248,0.15);--glow:rgba(129,140,248,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;min-height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(99,102,241,0.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(192,132,252,0.06) 0%,transparent 50%);pointer-events:none;z-index:0;}
+
+.header{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,10,18,0.88);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;}
+.header-logo{font-family:'Kaisei Decol',serif;font-size:1.05rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;flex:1;}
+.header-stats{display:flex;gap:8px;align-items:center;}
+.stat-badge{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:0.72rem;color:var(--text2);display:flex;align-items:center;gap:4px;}
+.stat-badge .value{color:var(--accent);font-weight:600;}
+.icon-link{color:var(--text2);font-size:1.1rem;text-decoration:none;}
+
+/* 複数端末バナー */
+.sync-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);border-radius:20px;padding:6px 14px;font-size:0.75rem;color:var(--accent3);z-index:200;display:none;white-space:nowrap;}
+.sync-toast.show{display:block;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+.offline-banner{position:fixed;top:57px;left:0;right:0;background:rgba(239,68,68,0.85);color:white;text-align:center;padding:6px;font-size:0.78rem;z-index:98;display:none;}
+.offline-banner.show{display:block;}
+
+/* タイマーバー */
+.timer-bar{position:fixed;top:57px;left:0;right:0;z-index:99;background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:none;align-items:center;gap:12px;}
+.timer-bar.visible{display:flex;}
+.timer-phase{font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;}
+.timer-phase.work{color:var(--accent)}.timer-phase.break{color:var(--accent3)}
+.timer-task{flex:1;font-size:0.82rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.timer-display{font-family:'Kaisei Decol',serif;font-size:1.2rem;color:var(--text);min-width:52px;text-align:right;}
+.timer-progress{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1s linear;}
+
+.chat-wrapper{flex:1;overflow-y:auto;padding:80px 16px 160px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth;}
+.chat-wrapper::-webkit-scrollbar{width:4px;}
+.chat-wrapper::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+.message{display:flex;gap:10px;max-width:100%;animation:msgIn 0.3s cubic-bezier(0.34,1.56,0.64,1);}
+@keyframes msgIn{from{opacity:0;transform:translateY(12px) scale(0.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+.message.user{flex-direction:row-reverse;}
+.avatar{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;margin-top:2px;}
+.avatar.ai{background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 12px var(--glow);}
+.avatar.user{background:var(--bg3);border:1px solid var(--border);}
+.bubble{max-width:min(72%,360px);padding:10px 14px;border-radius:16px;font-size:0.88rem;line-height:1.65;word-break:break-word;white-space:pre-wrap;}
+.message.ai .bubble{background:#1e1e32;border:1px solid var(--border);border-top-left-radius:4px;}
+.message.user .bubble{background:linear-gradient(135deg,#4f46e5,#7c3aed);border-top-right-radius:4px;box-shadow:0 4px 16px rgba(79,70,229,0.3);}
+.bubble-time{font-size:0.65rem;color:var(--text2);margin-top:4px;opacity:0.6;}
+.message.user .bubble-time{text-align:right;}
+
+.typing{display:flex;gap:10px;align-items:flex-end;}
+.typing-dots{background:#1e1e32;border:1px solid var(--border);border-radius:16px;border-top-left-radius:4px;padding:12px 16px;display:flex;gap:4px;align-items:center;}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:typing 1.2s infinite;}
+.typing-dot:nth-child(2){animation-delay:0.2s}.typing-dot:nth-child(3){animation-delay:0.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-6px);opacity:1;}}
+
+.input-area{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,10,18,0.92);backdrop-filter:blur(20px);border-top:1px solid var(--border);padding:12px 16px;padding-bottom:max(12px,env(safe-area-inset-bottom));}
+.quick-actions{display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.quick-actions::-webkit-scrollbar{display:none;}
+.quick-btn{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:0.75rem;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all 0.2s;font-family:'Noto Sans JP',sans-serif;}
+.quick-btn:hover,.quick-btn:active{background:rgba(129,140,248,0.15);border-color:var(--accent);color:var(--accent);}
+.input-row{display:flex;gap:10px;align-items:flex-end;}
+.input-box{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:10px 14px;color:var(--text);font-family:'Noto Sans JP',sans-serif;font-size:0.9rem;resize:none;max-height:120px;min-height:44px;outline:none;transition:border-color 0.2s;line-height:1.5;}
+.input-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(129,140,248,0.1);}
+.input-box::placeholder{color:var(--text2);opacity:0.5;}
+.send-btn{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;box-shadow:0 4px 12px var(--glow);}
+.send-btn:hover{transform:scale(1.05)}.send-btn:active{transform:scale(0.95)}.send-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.send-btn svg{width:18px;height:18px;fill:white;}
+
+/* UserID共有モーダル */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px;max-width:340px;width:90%;display:flex;flex-direction:column;gap:16px;}
+.modal h3{font-family:'Kaisei Decol',serif;font-size:1rem;color:var(--text);}
+.modal p{font-size:0.83rem;color:var(--text2);line-height:1.6;}
+.modal-url{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:0.78rem;color:var(--accent);word-break:break-all;cursor:pointer;user-select:all;}
+.modal-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;padding:10px;color:white;font-size:0.85rem;cursor:pointer;font-family:'Noto Sans JP',sans-serif;}
+.modal-close{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;font-family:'Noto Sans JP',sans-serif;}
+
+.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;gap:16px;}
+.welcome-icon{width:72px;height:72px;border-radius:24px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 8px 32px var(--glow);}
+.welcome h2{font-family:'Kaisei Decol',serif;font-size:1.4rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.welcome p{color:var(--text2);font-size:0.88rem;line-height:1.8;max-width:280px;}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">🧠 習慣改善パートナー</div>
+  <div class="header-stats">
+    <div class="stat-badge">🔥 <span class="value" id="streak">0</span>日</div>
+    <div class="stat-badge">📚 <span class="value" id="today-min">0</span>分</div>
+    <a href="/records" class="icon-link">📊</a>
+    <button onclick="showShareModal()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:1.1rem;">🔗</button>
+  </div>
+</header>
+
+<div class="sync-toast" id="sync-toast">✅ 他の端末と同期しました</div>
+<div class="offline-banner" id="offline-banner">📵 オフライン中 - キャッシュから読み込んでいます</div>
+
+<div class="timer-bar" id="timer-bar">
+  <span class="timer-phase work" id="timer-phase">FOCUS</span>
+  <span class="timer-task" id="timer-task"></span>
+  <span class="timer-display" id="timer-display">25:00</span>
+  <div class="timer-progress" id="timer-progress" style="width:100%"></div>
+</div>
+
+<div class="chat-wrapper" id="chat-wrapper">
+  <div class="welcome" id="welcome">
+    <div class="welcome-icon">🧠</div>
+    <h2>こんにちは！</h2>
+    <p>今日やることを教えてください。一緒にスケジュールを組んで、習慣を改善しましょう。</p>
+  </div>
+</div>
+
+<div class="input-area">
+  <div class="quick-actions" id="quick-actions">
+    <button class="quick-btn" onclick="quickSend('今日のタスクを整理して')">📋 タスク整理</button>
+    <button class="quick-btn" onclick="quickSend('やる気が出ない...')">😔 やる気出ない</button>
+    <button class="quick-btn" onclick="quickSend('25分集中タイマー開始して')">⏱ 集中タイマー</button>
+    <button class="quick-btn" onclick="quickSend('今日の実績を教えて')">✨ 今日の実績</button>
+    <button class="quick-btn" onclick="quickSend('休憩します')">☕ 休憩</button>
+  </div>
+  <div class="input-row">
+    <textarea class="input-box" id="input-box" placeholder="メッセージを入力..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- 複数端末共有モーダル -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal">
+    <h3>🔗 複数端末で使う</h3>
+    <p>このURLを別の端末で開くと、同じデータにアクセスできます。<br>（URLはあなた専用です。他人には見せないでください）</p>
+    <div class="modal-url" id="share-url" onclick="copyUrl()">読み込み中...</div>
+    <button class="modal-btn" onclick="copyUrl()">📋 URLをコピー</button>
+    <button class="modal-close" onclick="closeShareModal()">閉じる</button>
+  </div>
+</div>
+
+<script>
+// ===== 状態 =====
+let userId = null;
+let isLoading = false;
+let timerInterval = null;
+let timerState = null;
+let nagTimer = null;
+let nagStartTimer = null;
+const NAG_DELAY_MS = 10 * 60 * 1000;  // 10分後
+const NAG_INTERVAL_MS = 5 * 60 * 1000; // 5分ごと
+
+// ===== 初期化 =====
+async function init() {
+  // URLパラメーター優先（複数端末連携）
+  const params = new URLSearchParams(location.search);
+  const paramId = params.get('userId');
+  if (paramId) {
+    userId = paramId;
+    localStorage.setItem('userId', userId);
+    history.replaceState(null, '', '/');
+    showSyncToast('他の端末のデータを同期しました');
+  } else {
+    userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = 'web_' + Math.random().toString(36).slice(2, 14);
+      localStorage.setItem('userId', userId);
+    }
+  }
+
+  registerSW();
+  setupOfflineDetection();
+  setupVisibilityTracking();
+  await requestNotificationPermission();
+  await loadInitialData();
+}
+
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(console.error);
+  }
+}
+
+function setupOfflineDetection() {
+  const banner = document.getElementById('offline-banner');
+  window.addEventListener('online', () => {
+    banner.classList.remove('show');
+    showSyncToast('オンラインに復帰しました');
+  });
+  window.addEventListener('offline', () => banner.classList.add('show'));
+  if (!navigator.onLine) banner.classList.add('show');
+}
+
+// ===== しつこい通知（10分後から5分ごと）=====
+function setupVisibilityTracking() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      scheduleNagNotifications();
+    } else {
+      stopNagNotifications();
+    }
+  });
+}
+
+function scheduleNagNotifications() {
+  stopNagNotifications();
+  nagStartTimer = setTimeout(() => {
+    sendNag();
+    nagTimer = setInterval(sendNag, NAG_INTERVAL_MS);
+  }, NAG_DELAY_MS);
+}
+
+function stopNagNotifications() {
+  if (nagTimer) { clearInterval(nagTimer); nagTimer = null; }
+  if (nagStartTimer) { clearTimeout(nagStartTimer); nagStartTimer = null; }
+}
+
+function sendNag() {
+  const h = new Date().getHours();
+  if (h >= 23 || h < 6) return; // 深夜早朝は通知しない
+
+  const msgs = [
+    { title: "習慣改善パートナーより", body: "📱 サボってない？アプリに戻ってきて！" },
+    { title: "習慣改善パートナーより", body: "🧠 5分だけでいいからやろう。ほら。" },
+    { title: "習慣改善パートナーより", body: "⏰ まだ休憩中？そろそろ再開しない？" },
+    { title: "習慣改善パートナーより", body: "💪 タスクが待ってるよ！今すぐ開いて！" },
+    { title: "習慣改善パートナーより", body: "🔥 ストリーク切れちゃうよ！急いで！" },
+    { title: "習慣改善パートナーより", body: "😤 さっさとやること終わらせよう！" },
+  ];
+  const m = msgs[Math.floor(Math.random() * msgs.length)];
+
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SHOW_NOTIFICATION',
+      payload: {
+        title: m.title, body: m.body, tag: 'nag',
+        icon: '/icon-192.png', vibrate: [100, 50, 100],
+        requireInteraction: true,
+        actions: [{ action: 'open', title: '📱 今すぐ開く' }],
+        data: { url: '/' },
+      }
+    });
+  } else if (Notification.permission === 'granted') {
+    new Notification(m.title, { body: m.body, tag: 'nag', icon: '/icon-192.png', requireInteraction: true });
+  }
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+// ===== タスク時間通知のスケジュール =====
+let taskNotifTimers = [];
+
+function scheduleTaskNotifications(tasks) {
+  // 既存クリア
+  taskNotifTimers.forEach(t => clearTimeout(t));
+  taskNotifTimers = [];
+
+  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+
+  tasks.filter(t => t.startTime && t.status !== 'done').forEach(task => {
+    const [h, m] = task.startTime.split(':').map(Number);
+    const startAt = new Date();
+    startAt.setHours(h, m, 0, 0);
+    const now = Date.now();
+
+    // 5分前リマインダー
+    const reminderDelay = startAt.getTime() - 5 * 60 * 1000 - now;
+    if (reminderDelay > 0) {
+      taskNotifTimers.push(setTimeout(() => {
+        fireNotification({ title: '⚡ 5分後にタスク開始', body: `「${task.title}」の準備をしよう！`, tag: `reminder_${task.id}`, requireInteraction: false });
+      }, reminderDelay));
+    }
+
+    // 開始通知
+    const startDelay = startAt.getTime() - now;
+    if (startDelay > 0) {
+      taskNotifTimers.push(setTimeout(() => {
+        fireNotification({
+          title: '📚 タスク開始！', body: `「${task.title}」始めよう！(${task.duration}分)`,
+          tag: `start_${task.id}`, requireInteraction: true,
+          actions: [{ action: 'open', title: '▶ 開始する' }, { action: 'snooze', title: '💤 5分後に' }]
+        });
+      }, startDelay));
+    }
+
+    // 終了通知
+    const endDelay = startAt.getTime() + task.duration * 60 * 1000 - now;
+    if (endDelay > 0) {
+      taskNotifTimers.push(setTimeout(() => {
+        fireNotification({ title: '⏱ タスク完了！', body: `「${task.title}」お疲れ様！次は何する？`, tag: `end_${task.id}`, requireInteraction: false });
+      }, endDelay));
+    }
+  });
+}
+
+function fireNotification({ title, body, tag, requireInteraction = false, actions = [] }) {
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SHOW_NOTIFICATION',
+      payload: { title, body, tag, icon: '/icon-192.png', vibrate: [100, 50, 100], requireInteraction, actions, data: { url: '/' } }
+    });
+  } else {
+    new Notification(title, { body, tag, icon: '/icon-192.png', requireInteraction });
+  }
+}
+
+// ===== データ読み込み =====
+async function loadInitialData() {
+  try {
+    const res = await fetch(`/api/user?userId=${userId}`);
+    if (res.ok) {
+      const data = await res.json();
+      updateStats(data.stats);
+      if (data.timer?.isRunning) startTimerUI(data.timer);
+      if (data.todayTasks?.length) scheduleTaskNotifications(data.todayTasks);
+      if (data.todayMessages?.length > 0) {
+        document.getElementById('welcome').style.display = 'none';
+        data.todayMessages.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'ai', m.content, false));
+        scrollToBottom();
+      }
+    }
+  } catch { /* オフライン時は無視 */ }
+}
+
+// ===== メッセージ送信 =====
+async function sendMessage() {
+  const input = document.getElementById('input-box');
+  const text = input.value.trim();
+  if (!text || isLoading) return;
+  input.value = '';
+  autoResize(input);
+  setLoading(true);
+  document.getElementById('welcome').style.display = 'none';
+
+  // 送信でしつこい通知リセット
+  stopNagNotifications();
+
+  appendMessage('user', text);
+  showTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, message: text, source: 'web' }),
+    });
+    const data = await res.json();
+    hideTyping();
+    appendMessage('ai', data.message || 'エラーが発生しました');
+    if (data.stats) updateStats(data.stats);
+    if (data.timer) {
+      if (data.timer.isRunning) startTimerUI(data.timer);
+      else stopTimerUI();
+    }
+    if (data.todayTasks) {
+      scheduleTaskNotifications(data.todayTasks);
+      renderNextTaskBtn(data.todayTasks);
+    }
+  } catch {
+    hideTyping();
+    appendMessage('ai', 'ごめん、エラーが発生しちゃった💦 もう一回試してみて！');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function quickSend(text) {
+  document.getElementById('input-box').value = text;
+  sendMessage();
+}
+
+// ===== UI =====
+function appendMessage(role, text, animate = true) {
+  const wrapper = document.getElementById('chat-wrapper');
+  const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  if (!animate) div.style.animation = 'none';
+  div.innerHTML = `
+    <div class="avatar ${role}">${role === 'ai' ? '🧠' : '👤'}</div>
+    <div>
+      <div class="bubble">${escapeHtml(text)}</div>
+      <div class="bubble-time">${now}</div>
+    </div>`;
+  wrapper.appendChild(div);
+  if (animate) scrollToBottom();
+}
+
+function showTyping() {
+  const wrapper = document.getElementById('chat-wrapper');
+  const el = document.createElement('div');
+  el.className = 'typing'; el.id = 'typing-indicator';
+  el.innerHTML = `<div class="avatar ai">🧠</div><div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+  wrapper.appendChild(el);
+  scrollToBottom();
+}
+
+function hideTyping() { document.getElementById('typing-indicator')?.remove(); }
+function setLoading(v) { isLoading = v; document.getElementById('send-btn').disabled = v; }
+function scrollToBottom() { const w = document.getElementById('chat-wrapper'); setTimeout(() => w.scrollTo({ top: w.scrollHeight, behavior: 'smooth' }), 50); }
+
+function updateStats(stats) {
+  if (stats?.streaks !== undefined) document.getElementById('streak').textContent = stats.streaks;
+  if (stats?.todayMinutes !== undefined) document.getElementById('today-min').textContent = stats.todayMinutes;
+}
+
+function renderNextTaskBtn(tasks) {
+  const pending = tasks.filter(t => t.status !== 'done');
+  const qa = document.getElementById('quick-actions');
+  qa.querySelector('.task-next-btn')?.remove();
+  if (!pending.length) return;
+  const btn = document.createElement('button');
+  btn.className = 'quick-btn task-next-btn';
+  btn.textContent = `▶ ${pending[0].title} (${pending[0].duration}分)`;
+  btn.onclick = () => quickSend(`「${pending[0].title}」を開始します`);
+  qa.insertBefore(btn, qa.firstChild);
+}
+
+// ===== タイマー =====
+function startTimerUI(timer) {
+  timerState = { ...timer, clientStartedAt: Date.now() };
+  document.getElementById('timer-bar').classList.add('visible');
+  document.getElementById('timer-phase').textContent = timer.phase === 'work' ? 'FOCUS' : 'BREAK';
+  document.getElementById('timer-phase').className = `timer-phase ${timer.phase}`;
+  document.getElementById('timer-task').textContent = timer.taskTitle || '';
+  document.querySelector('.chat-wrapper').style.paddingTop = '115px';
+  clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimerDisplay, 1000);
+  updateTimerDisplay();
+  // SWにタイマー終了通知を予約
+  const totalMs = timer.duration * 60 * 1000;
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SCHEDULE_TIMER_NOTIFICATION',
+      delayMs: totalMs,
+      title: timer.phase === 'work' ? '⏱ 集中時間終了！' : '☕ 休憩終了！',
+      body: timer.phase === 'work' ? 'お疲れ様！休憩しよう' : 'また頑張ろう！',
+      tag: 'timer_end',
+    });
+  }
+}
+
+function updateTimerDisplay() {
+  if (!timerState) return;
+  const elapsed = Math.floor((Date.now() - timerState.clientStartedAt) / 1000);
+  const total = timerState.duration * 60;
+  const remaining = Math.max(0, total - elapsed);
+  const min = Math.floor(remaining / 60).toString().padStart(2, '0');
+  const sec = (remaining % 60).toString().padStart(2, '0');
+  document.getElementById('timer-display').textContent = `${min}:${sec}`;
+  document.getElementById('timer-progress').style.width = `${(remaining / total) * 100}%`;
+  if (remaining === 0) { clearInterval(timerInterval); stopTimerUI(); }
+}
+
+function stopTimerUI() {
+  clearInterval(timerInterval); timerState = null;
+  document.getElementById('timer-bar').classList.remove('visible');
+  document.querySelector('.chat-wrapper').style.paddingTop = '80px';
+}
+
+// ===== 複数端末共有モーダル =====
+function showShareModal() {
+  const url = `${location.origin}?userId=${userId}`;
+  document.getElementById('share-url').textContent = url;
+  document.getElementById('share-modal').classList.add('show');
+}
+function closeShareModal() { document.getElementById('share-modal').classList.remove('show'); }
+function copyUrl() {
+  const url = `${location.origin}?userId=${userId}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showSyncToast('URLをコピーしました！');
+    closeShareModal();
+  });
+}
+
+function showSyncToast(msg) {
+  const t = document.getElementById('sync-toast');
+  t.textContent = '✅ ' + msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+function escapeHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>'); }
+
+init();
+</script>
+</body>
+</html>
