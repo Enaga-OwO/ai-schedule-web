@@ -1,12 +1,5 @@
 {
   "version": 2,
-  "redirects": [
-    {
-      "source": "/records",
-      "destination": "/records.html",
-      "permanent": false
-    }
-  ],
   "headers": [
     {
       "source": "/sw.js",
