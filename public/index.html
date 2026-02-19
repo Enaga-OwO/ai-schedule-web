@@ -26,7 +26,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .stat-badge .value{color:var(--accent);font-weight:600;}
 .icon-link{color:var(--text2);font-size:1.1rem;text-decoration:none;}
 
-/* 複数端末バナー */
 .sync-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);border-radius:20px;padding:6px 14px;font-size:0.75rem;color:var(--accent3);z-index:200;display:none;white-space:nowrap;}
 .sync-toast.show{display:block;animation:fadeIn 0.3s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
@@ -34,7 +33,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .offline-banner{position:fixed;top:57px;left:0;right:0;background:rgba(239,68,68,0.85);color:white;text-align:center;padding:6px;font-size:0.78rem;z-index:98;display:none;}
 .offline-banner.show{display:block;}
 
-/* タイマーバー */
 .timer-bar{position:fixed;top:57px;left:0;right:0;z-index:99;background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:none;align-items:center;gap:12px;}
 .timer-bar.visible{display:flex;}
 .timer-phase{font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;}
@@ -78,7 +76,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .send-btn:hover{transform:scale(1.05)}.send-btn:active{transform:scale(0.95)}.send-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
 .send-btn svg{width:18px;height:18px;fill:white;}
 
-/* UserID共有モーダル */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;}
 .modal-overlay.show{display:flex;}
 .modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:24px;max-width:340px;width:90%;display:flex;flex-direction:column;gap:16px;}
@@ -106,7 +103,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
 </header>
 
-<div class="sync-toast" id="sync-toast">✅ 他の端末と同期しました</div>
+<div class="sync-toast" id="sync-toast"></div>
 <div class="offline-banner" id="offline-banner">📵 オフライン中 - キャッシュから読み込んでいます</div>
 
 <div class="timer-bar" id="timer-bar">
@@ -140,11 +137,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
 </div>
 
-<!-- 複数端末共有モーダル -->
 <div class="modal-overlay" id="share-modal">
   <div class="modal">
     <h3>🔗 複数端末で使う</h3>
-    <p>このURLを別の端末で開くと、同じデータにアクセスできます。<br>（URLはあなた専用です。他人には見せないでください）</p>
+    <p>このURLを別の端末で開くと、同じデータにアクセスできます。</p>
     <div class="modal-url" id="share-url" onclick="copyUrl()">読み込み中...</div>
     <button class="modal-btn" onclick="copyUrl()">📋 URLをコピー</button>
     <button class="modal-close" onclick="closeShareModal()">閉じる</button>
@@ -152,19 +148,19 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </div>
 
 <script>
-// ===== 状態 =====
 let userId = null;
 let isLoading = false;
 let timerInterval = null;
 let timerState = null;
+let timerRunning = false; // 集中タイマーが動いているかどうか
+
+// しつこい通知用
 let nagTimer = null;
 let nagStartTimer = null;
-const NAG_DELAY_MS = 10 * 60 * 1000;  // 10分後
-const NAG_INTERVAL_MS = 5 * 60 * 1000; // 5分ごと
+const NAG_DELAY_MS = 10 * 60 * 1000;
+const NAG_INTERVAL_MS = 5 * 60 * 1000;
 
-// ===== 初期化 =====
 async function init() {
-  // URLパラメーター優先（複数端末連携）
   const params = new URLSearchParams(location.search);
   const paramId = params.get('userId');
   if (paramId) {
@@ -195,19 +191,19 @@ function registerSW() {
 
 function setupOfflineDetection() {
   const banner = document.getElementById('offline-banner');
-  window.addEventListener('online', () => {
-    banner.classList.remove('show');
-    showSyncToast('オンラインに復帰しました');
-  });
+  window.addEventListener('online', () => { banner.classList.remove('show'); showSyncToast('オンラインに復帰しました'); });
   window.addEventListener('offline', () => banner.classList.add('show'));
   if (!navigator.onLine) banner.classList.add('show');
 }
 
-// ===== しつこい通知（10分後から5分ごと）=====
+// ===== しつこい通知：集中タイマー動作中にアプリを閉じた時だけ =====
 function setupVisibilityTracking() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      scheduleNagNotifications();
+      // タイマーが動いている時だけしつこく通知
+      if (timerRunning) {
+        scheduleNagNotifications();
+      }
     } else {
       stopNagNotifications();
     }
@@ -229,50 +225,29 @@ function stopNagNotifications() {
 
 function sendNag() {
   const h = new Date().getHours();
-  if (h >= 23 || h < 6) return; // 深夜早朝は通知しない
-
+  if (h >= 23 || h < 6) return;
   const msgs = [
-    { title: "習慣改善パートナーより", body: "📱 サボってない？アプリに戻ってきて！" },
-    { title: "習慣改善パートナーより", body: "🧠 5分だけでいいからやろう。ほら。" },
-    { title: "習慣改善パートナーより", body: "⏰ まだ休憩中？そろそろ再開しない？" },
-    { title: "習慣改善パートナーより", body: "💪 タスクが待ってるよ！今すぐ開いて！" },
-    { title: "習慣改善パートナーより", body: "🔥 ストリーク切れちゃうよ！急いで！" },
-    { title: "習慣改善パートナーより", body: "😤 さっさとやること終わらせよう！" },
+    '📱 集中タイマー動いてるよ！アプリに戻ってきて！',
+    '⏱ タイマー動いてるのにサボってない？',
+    '🧠 集中中じゃなかったの？戻っておいで！',
+    '💪 タスクが待ってるよ！今すぐ開いて！',
+    '🔥 集中タイム中断しないで！',
   ];
   const m = msgs[Math.floor(Math.random() * msgs.length)];
-
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SHOW_NOTIFICATION',
-      payload: {
-        title: m.title, body: m.body, tag: 'nag',
-        icon: '/icon-192.png', vibrate: [100, 50, 100],
-        requireInteraction: true,
-        actions: [{ action: 'open', title: '📱 今すぐ開く' }],
-        data: { url: '/' },
-      }
-    });
-  } else if (Notification.permission === 'granted') {
-    new Notification(m.title, { body: m.body, tag: 'nag', icon: '/icon-192.png', requireInteraction: true });
-  }
+  fireNotification({ title: '習慣改善パートナーより', body: m, tag: 'nag', requireInteraction: true, actions: [{ action: 'open', title: '📱 今すぐ開く' }] });
 }
 
 async function requestNotificationPermission() {
   if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission();
-  }
+  if (Notification.permission === 'default') await Notification.requestPermission();
 }
 
-// ===== タスク時間通知のスケジュール =====
+// タスク時間通知
 let taskNotifTimers = [];
-
 function scheduleTaskNotifications(tasks) {
-  // 既存クリア
   taskNotifTimers.forEach(t => clearTimeout(t));
   taskNotifTimers = [];
-
-  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+  if (Notification.permission !== 'granted') return;
 
   tasks.filter(t => t.startTime && t.status !== 'done').forEach(task => {
     const [h, m] = task.startTime.split(':').map(Number);
@@ -280,7 +255,6 @@ function scheduleTaskNotifications(tasks) {
     startAt.setHours(h, m, 0, 0);
     const now = Date.now();
 
-    // 5分前リマインダー
     const reminderDelay = startAt.getTime() - 5 * 60 * 1000 - now;
     if (reminderDelay > 0) {
       taskNotifTimers.push(setTimeout(() => {
@@ -288,23 +262,17 @@ function scheduleTaskNotifications(tasks) {
       }, reminderDelay));
     }
 
-    // 開始通知
     const startDelay = startAt.getTime() - now;
     if (startDelay > 0) {
       taskNotifTimers.push(setTimeout(() => {
-        fireNotification({
-          title: '📚 タスク開始！', body: `「${task.title}」始めよう！(${task.duration}分)`,
-          tag: `start_${task.id}`, requireInteraction: true,
-          actions: [{ action: 'open', title: '▶ 開始する' }, { action: 'snooze', title: '💤 5分後に' }]
-        });
+        fireNotification({ title: '📚 タスク開始！', body: `「${task.title}」始めよう！(${task.duration}分)`, tag: `start_${task.id}`, requireInteraction: true, actions: [{ action: 'open', title: '▶ 開始する' }, { action: 'snooze', title: '💤 5分後に' }] });
       }, startDelay));
     }
 
-    // 終了通知
     const endDelay = startAt.getTime() + task.duration * 60 * 1000 - now;
     if (endDelay > 0) {
       taskNotifTimers.push(setTimeout(() => {
-        fireNotification({ title: '⏱ タスク完了！', body: `「${task.title}」お疲れ様！次は何する？`, tag: `end_${task.id}`, requireInteraction: false });
+        fireNotification({ title: '⏱ タスク完了！', body: `「${task.title}」お疲れ様！`, tag: `end_${task.id}`, requireInteraction: false });
       }, endDelay));
     }
   });
@@ -316,12 +284,11 @@ function fireNotification({ title, body, tag, requireInteraction = false, action
       type: 'SHOW_NOTIFICATION',
       payload: { title, body, tag, icon: '/icon-192.png', vibrate: [100, 50, 100], requireInteraction, actions, data: { url: '/' } }
     });
-  } else {
+  } else if (Notification.permission === 'granted') {
     new Notification(title, { body, tag, icon: '/icon-192.png', requireInteraction });
   }
 }
 
-// ===== データ読み込み =====
 async function loadInitialData() {
   try {
     const res = await fetch(`/api/user?userId=${userId}`);
@@ -336,10 +303,9 @@ async function loadInitialData() {
         scrollToBottom();
       }
     }
-  } catch { /* オフライン時は無視 */ }
+  } catch {}
 }
 
-// ===== メッセージ送信 =====
 async function sendMessage() {
   const input = document.getElementById('input-box');
   const text = input.value.trim();
@@ -348,10 +314,7 @@ async function sendMessage() {
   autoResize(input);
   setLoading(true);
   document.getElementById('welcome').style.display = 'none';
-
-  // 送信でしつこい通知リセット
   stopNagNotifications();
-
   appendMessage('user', text);
   showTyping();
 
@@ -381,24 +344,15 @@ async function sendMessage() {
   }
 }
 
-function quickSend(text) {
-  document.getElementById('input-box').value = text;
-  sendMessage();
-}
+function quickSend(text) { document.getElementById('input-box').value = text; sendMessage(); }
 
-// ===== UI =====
 function appendMessage(role, text, animate = true) {
   const wrapper = document.getElementById('chat-wrapper');
   const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   const div = document.createElement('div');
   div.className = `message ${role}`;
   if (!animate) div.style.animation = 'none';
-  div.innerHTML = `
-    <div class="avatar ${role}">${role === 'ai' ? '🧠' : '👤'}</div>
-    <div>
-      <div class="bubble">${escapeHtml(text)}</div>
-      <div class="bubble-time">${now}</div>
-    </div>`;
+  div.innerHTML = `<div class="avatar ${role}">${role === 'ai' ? '🧠' : '👤'}</div><div><div class="bubble">${escapeHtml(text)}</div><div class="bubble-time">${now}</div></div>`;
   wrapper.appendChild(div);
   if (animate) scrollToBottom();
 }
@@ -415,12 +369,10 @@ function showTyping() {
 function hideTyping() { document.getElementById('typing-indicator')?.remove(); }
 function setLoading(v) { isLoading = v; document.getElementById('send-btn').disabled = v; }
 function scrollToBottom() { const w = document.getElementById('chat-wrapper'); setTimeout(() => w.scrollTo({ top: w.scrollHeight, behavior: 'smooth' }), 50); }
-
 function updateStats(stats) {
   if (stats?.streaks !== undefined) document.getElementById('streak').textContent = stats.streaks;
   if (stats?.todayMinutes !== undefined) document.getElementById('today-min').textContent = stats.todayMinutes;
 }
-
 function renderNextTaskBtn(tasks) {
   const pending = tasks.filter(t => t.status !== 'done');
   const qa = document.getElementById('quick-actions');
@@ -433,9 +385,9 @@ function renderNextTaskBtn(tasks) {
   qa.insertBefore(btn, qa.firstChild);
 }
 
-// ===== タイマー =====
 function startTimerUI(timer) {
   timerState = { ...timer, clientStartedAt: Date.now() };
+  timerRunning = true; // ← タイマー起動フラグON
   document.getElementById('timer-bar').classList.add('visible');
   document.getElementById('timer-phase').textContent = timer.phase === 'work' ? 'FOCUS' : 'BREAK';
   document.getElementById('timer-phase').className = `timer-phase ${timer.phase}`;
@@ -444,12 +396,10 @@ function startTimerUI(timer) {
   clearInterval(timerInterval);
   timerInterval = setInterval(updateTimerDisplay, 1000);
   updateTimerDisplay();
-  // SWにタイマー終了通知を予約
-  const totalMs = timer.duration * 60 * 1000;
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
       type: 'SCHEDULE_TIMER_NOTIFICATION',
-      delayMs: totalMs,
+      delayMs: timer.duration * 60 * 1000,
       title: timer.phase === 'work' ? '⏱ 集中時間終了！' : '☕ 休憩終了！',
       body: timer.phase === 'work' ? 'お疲れ様！休憩しよう' : 'また頑張ろう！',
       tag: 'timer_end',
@@ -470,33 +420,31 @@ function updateTimerDisplay() {
 }
 
 function stopTimerUI() {
-  clearInterval(timerInterval); timerState = null;
+  clearInterval(timerInterval);
+  timerState = null;
+  timerRunning = false; // ← タイマー停止フラグOFF
+  stopNagNotifications(); // タイマー終了したらしつこい通知も止める
   document.getElementById('timer-bar').classList.remove('visible');
   document.querySelector('.chat-wrapper').style.paddingTop = '80px';
 }
 
-// ===== 複数端末共有モーダル =====
 function showShareModal() {
-  const url = `${location.origin}?userId=${userId}`;
-  document.getElementById('share-url').textContent = url;
+  document.getElementById('share-url').textContent = `${location.origin}?userId=${userId}`;
   document.getElementById('share-modal').classList.add('show');
 }
 function closeShareModal() { document.getElementById('share-modal').classList.remove('show'); }
 function copyUrl() {
-  const url = `${location.origin}?userId=${userId}`;
-  navigator.clipboard.writeText(url).then(() => {
+  navigator.clipboard.writeText(`${location.origin}?userId=${userId}`).then(() => {
     showSyncToast('URLをコピーしました！');
     closeShareModal();
   });
 }
-
 function showSyncToast(msg) {
   const t = document.getElementById('sync-toast');
   t.textContent = '✅ ' + msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
-
 function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
 function escapeHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>'); }
