@@ -28,7 +28,6 @@ const SYSTEM_PROMPT = `あなたは「習慣改善パートナー」です。ユ
 {{USER_CONTEXT}}
 `;
 
-// 複数APIキーを環境変数から動的取得
 function getApiKeys(): string[] {
   const keys: string[] = [];
   let i = 1;
@@ -38,14 +37,12 @@ function getApiKeys(): string[] {
     keys.push(key);
     i++;
   }
-  // フォールバック: 単一キー
   if (keys.length === 0 && process.env.GEMINI_API_KEY) {
     keys.push(process.env.GEMINI_API_KEY);
   }
   return keys;
 }
 
-// ラウンドロビン用カウンター（Vercel Serverlessでは揮発するのでランダムに）
 function pickKey(keys: string[]): string {
   if (keys.length === 0) throw new Error("Gemini APIキーが設定されていません");
   return keys[Math.floor(Math.random() * keys.length)];
@@ -56,10 +53,25 @@ export interface Message {
   content: string;
 }
 
+// TimerStateと完全に一致させる
 export interface UserContext {
   name?: string;
-  todayTasks?: Array<{ title: string; status: string; duration: number }>;
-  currentTimer?: { phase: string; remaining: number } | null;
+  goals?: string[];
+  todayTasks?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    duration: number;
+    category: string;
+  }>;
+  currentTimer?: {
+    taskId?: string;
+    taskTitle?: string;
+    startedAt?: string;
+    duration: number;
+    phase: string;
+    isRunning: boolean;
+  } | null;
   streaks?: number;
   todayStudyMinutes?: number;
 }
@@ -83,7 +95,6 @@ export async function callGemini(
   const contextStr = JSON.stringify(userContext, null, 2);
   const systemPrompt = SYSTEM_PROMPT.replace("{{USER_CONTEXT}}", contextStr);
 
-  // Gemini用のメッセージ形式に変換
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -108,9 +119,7 @@ export async function callGemini(
 
     if (!response.ok) {
       const error = await response.json();
-      // レート制限エラーの場合は別のキーでリトライ
       if (response.status === 429 && retryCount < keys.length - 1) {
-        console.log(`API key rate limited, retrying with different key...`);
         return callGemini(messages, userContext, retryCount + 1);
       }
       throw new Error(`Gemini API error: ${JSON.stringify(error)}`);
@@ -120,7 +129,6 @@ export async function callGemini(
     const rawText =
       data.candidates?.[0]?.content?.parts?.[0]?.text ?? "応答を取得できませんでした";
 
-    // JSONアクションコマンドを抽出
     const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
     let action: GeminiResponse["action"] | undefined;
     let text = rawText;
