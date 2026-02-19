@@ -1,4 +1,5 @@
-// lib/gemini.ts - Gemini API 複数キーローテーション管理
+// lib/gemini.ts - Gemma-3-27b-it対応版
+// gemma系はsystem_instructionが使えないのでユーザーメッセージに埋め込む
 
 const SYSTEM_PROMPT = `あなたは「習慣改善パートナー」です。ユーザーの勉強を中心とした生活習慣改善を、親しみやすく、時に厳しく、でも温かくサポートします。
 
@@ -24,9 +25,10 @@ const SYSTEM_PROMPT = `あなたは「習慣改善パートナー」です。ユ
 }
 \`\`\`
 
-## 現在の状況
+## 現在のユーザー状況
 {{USER_CONTEXT}}
-`;
+
+上記の指示に従って、次のメッセージに日本語で返答してください。`;
 
 function getApiKeys(): string[] {
   const keys: string[] = [];
@@ -44,7 +46,7 @@ function getApiKeys(): string[] {
 }
 
 function pickKey(keys: string[]): string {
-  if (keys.length === 0) throw new Error("Gemini APIキーが設定されていません");
+  if (keys.length === 0) throw new Error("APIキーが設定されていません");
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
@@ -53,7 +55,6 @@ export interface Message {
   content: string;
 }
 
-// TimerStateと完全に一致させる
 export interface UserContext {
   name?: string;
   goals?: string[];
@@ -93,12 +94,41 @@ export async function callGemini(
   const apiKey = pickKey(keys);
 
   const contextStr = JSON.stringify(userContext, null, 2);
-  const systemPrompt = SYSTEM_PROMPT.replace("{{USER_CONTEXT}}", contextStr);
+  const systemText = SYSTEM_PROMPT.replace("{{USER_CONTEXT}}", contextStr);
 
-  const contents = messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
+  // gemma系はsystem_instructionが使えないので
+  // 最初のユーザーメッセージの前にシステムプロンプトを埋め込む
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+  if (messages.length === 0) {
+    contents.push({
+      role: "user",
+      parts: [{ text: systemText + "\n\nこんにちは！" }],
+    });
+    contents.push({
+      role: "model",
+      parts: [{ text: "こんにちは！習慣改善パートナーです。今日も一緒に頑張りましょう！" }],
+    });
+  } else {
+    // 最初のメッセージにシステムプロンプトを付加
+    contents.push({
+      role: "user",
+      parts: [{ text: systemText + "\n\n" + messages[0].content }],
+    });
+    if (messages.length > 1) {
+      contents.push({
+        role: "model",
+        parts: [{ text: messages[1]?.role === "assistant" ? messages[1].content : "わかりました！" }],
+      });
+      // 残りのメッセージを追加
+      for (let i = 2; i < messages.length; i++) {
+        contents.push({
+          role: messages[i].role === "assistant" ? "model" : "user",
+          parts: [{ text: messages[i].content }],
+        });
+      }
+    }
+  }
 
   try {
     const response = await fetch(
@@ -107,7 +137,6 @@ export async function callGemini(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
           contents,
           generationConfig: {
             temperature: 0.8,
@@ -138,7 +167,7 @@ export async function callGemini(
         action = JSON.parse(jsonMatch[1]);
         text = rawText.replace(/```json\n[\s\S]*?\n```/, "").trim();
       } catch {
-        // JSON解析失敗は無視
+        // 無視
       }
     }
 
